@@ -7,6 +7,7 @@ import type pino from "pino";
 
 import type {
   SpeechStreamResult,
+  SpeechSynthesisOptions,
   SpeechToTextProvider,
   StreamingTranscriptionSession,
   TextToSpeechProvider,
@@ -199,11 +200,15 @@ export class LocalSpeechWorkerClient {
     this.forkWorker = options.forkWorker ?? forkLocalSpeechWorker;
   }
 
-  async synthesizeSpeech(text: string): Promise<SpeechStreamResult> {
+  async synthesizeSpeech(
+    text: string,
+    options: SpeechSynthesisOptions = {},
+  ): Promise<SpeechStreamResult> {
     const result = await this.sendRequest<LocalSpeechTtsResult>({
       type: "tts.synthesize",
       config: this.config,
       text,
+      language: options.language,
     });
     return {
       stream: Readable.from([workerBytesToBuffer(result.audio)]),
@@ -598,8 +603,8 @@ export class LocalSpeechWorkerClient {
 export class WorkerBackedTextToSpeechProvider implements TextToSpeechProvider {
   constructor(private readonly client: LocalSpeechWorkerClient) {}
 
-  synthesizeSpeech(text: string): Promise<SpeechStreamResult> {
-    return this.client.synthesizeSpeech(text);
+  synthesizeSpeech(text: string, options?: SpeechSynthesisOptions): Promise<SpeechStreamResult> {
+    return this.client.synthesizeSpeech(text, options);
   }
 }
 

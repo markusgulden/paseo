@@ -12,6 +12,7 @@ import {
   type LocalSpeechModelId,
   type LocalSttModelId,
   type LocalTtsModelId,
+  primaryLanguageSubtag,
 } from "./models.js";
 
 export interface LocalSpeechModelConfig {
@@ -20,6 +21,7 @@ export interface LocalSpeechModelConfig {
   voiceTts: LocalTtsModelId;
   voiceTtsSpeakerId?: number;
   voiceTtsSpeed?: number;
+  voiceTtsVoices?: Record<string, LocalTtsModelId>;
 }
 
 export interface LocalSpeechProviderConfig {
@@ -63,6 +65,14 @@ const LocalSpeechResolutionSchema = z.object({
   voiceLanguage: LanguageSchema,
   voiceLocalTtsSpeakerId: OptionalIntegerSchema,
   voiceLocalTtsSpeed: OptionalFiniteNumberSchema,
+  voiceLocalTtsVoices: z
+    .record(z.string(), LocalTtsModelIdSchema)
+    .transform((voices) =>
+      Object.fromEntries(
+        Object.entries(voices).map(([language, model]) => [primaryLanguageSubtag(language), model]),
+      ),
+    )
+    .optional(),
 });
 
 function persistedLocalFeatureModel(
@@ -135,6 +145,16 @@ function buildLocalSpeechLanguageResolutionInput(params: {
   };
 }
 
+function persistedLocalVoices(
+  providers: RequestedSpeechProviders,
+  persisted: PersistedConfig,
+): Record<string, string> | undefined {
+  if (providers.voiceTts.provider !== "local" || providers.voiceTts.enabled === false) {
+    return undefined;
+  }
+  return persisted.features?.voiceMode?.tts?.voices;
+}
+
 function buildLocalSpeechResolutionInput(params: {
   paseoHome: string;
   env: NodeJS.ProcessEnv;
@@ -186,6 +206,7 @@ function buildLocalSpeechResolutionInput(params: {
       env.PASEO_VOICE_LOCAL_TTS_SPEED,
       persisted.features?.voiceMode?.tts?.speed,
     ]),
+    voiceLocalTtsVoices: persistedLocalVoices(providers, persisted),
   };
 }
 
@@ -221,6 +242,9 @@ export function resolveLocalSpeechConfig(params: {
               : {}),
             ...(parsed.voiceLocalTtsSpeed !== undefined
               ? { voiceTtsSpeed: parsed.voiceLocalTtsSpeed }
+              : {}),
+            ...(parsed.voiceLocalTtsVoices !== undefined
+              ? { voiceTtsVoices: parsed.voiceLocalTtsVoices }
               : {}),
           },
         }

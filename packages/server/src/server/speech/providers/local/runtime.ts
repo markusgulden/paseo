@@ -24,6 +24,7 @@ interface ResolvedLocalModels {
   dictationLocalSttModel: LocalSttModelId;
   voiceLocalSttModel: LocalSttModelId;
   voiceLocalTtsModel: LocalTtsModelId;
+  voiceLocalTtsVoices: LocalTtsModelId[];
 }
 
 interface LocalSpeechAvailability {
@@ -56,6 +57,7 @@ function resolveConfiguredLocalModels(speechConfig: PaseoSpeechConfig | null): R
     voiceLocalTtsModel: LocalTtsModelIdSchema.parse(
       speechConfig?.local?.models.voiceTts ?? DEFAULT_LOCAL_TTS_MODEL,
     ),
+    voiceLocalTtsVoices: Object.values(speechConfig?.local?.models.voiceTtsVoices ?? {}),
   };
 }
 
@@ -91,6 +93,9 @@ function computeRequiredLocalModelIds(params: {
     params.providers.voiceTts.provider === "local"
   ) {
     ids.add(params.models.voiceLocalTtsModel);
+    for (const voice of params.models.voiceLocalTtsVoices) {
+      ids.add(voice);
+    }
   }
   return Array.from(ids);
 }
@@ -164,6 +169,7 @@ export async function initializeLocalSpeechServices(params: {
           voiceTtsModel: localModels.voiceLocalTtsModel,
           voiceTtsSpeakerId: speechConfig?.local?.models.voiceTtsSpeakerId,
           voiceTtsSpeed: speechConfig?.local?.models.voiceTtsSpeed,
+          voiceTtsVoices: speechConfig?.local?.models.voiceTtsVoices,
         },
       })
     : null;

@@ -82,7 +82,7 @@ The `language` field applies only to the OpenAI STT provider: set `features.dict
 | `piper-de_de-thorsten-medium` | German ([Piper](https://github.com/rhasspy/piper) voice) | 1                                         |
 | `piper-fr_fr-siwis-medium`    | French (Piper voice)                                     | 1                                         |
 
-A local voice speaks one language: given text in another language, it reads it with its own pronunciation. To talk to voice mode in another language, pair a voice in that language with `parakeet-tdt-0.6b-v3-int8`. For German:
+A local voice speaks one language: given text in another language, it reads it with its own pronunciation. To talk to voice mode in several languages, use `parakeet-tdt-0.6b-v3-int8` for speech-to-text and map each language to a voice under `tts.voices`:
 
 ```json
 {
@@ -90,13 +90,22 @@ A local voice speaks one language: given text in another language, it reads it w
   "features": {
     "voiceMode": {
       "stt": { "provider": "local", "model": "parakeet-tdt-0.6b-v3-int8" },
-      "tts": { "provider": "local", "model": "piper-de_de-thorsten-medium" }
+      "tts": {
+        "provider": "local",
+        "model": "kokoro-en-v0_19",
+        "voices": {
+          "de": "piper-de_de-thorsten-medium",
+          "fr": "piper-fr_fr-siwis-medium"
+        }
+      }
     }
   }
 }
 ```
 
-Piper voices have a single speaker, so leave `speakerId` out. `speed` applies to every local voice.
+The agent declares the language of each reply when it calls the `speak` tool. Paseo uses the voice mapped to that language and falls back to `model` when the language is missing or unmapped. Keys are ISO 639-1 codes; regional tags such as `de-AT` match `de`. Mapped voices are required like `model`: they download at daemon startup, and voice mode is unavailable until all of them are present.
+
+To use a single non-English voice, set it as `model` and leave out `voices`. `speakerId` applies to `model` only; Piper voices have a single speaker. `speed` applies to every local voice.
 
 ## OpenAI Voice Option
 

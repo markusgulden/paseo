@@ -1051,10 +1051,11 @@ export class VoiceSession {
   }
 
   private registerVoiceBridgeForAgent(agentId: string): void {
-    this.registerVoiceSpeakHandler?.(agentId, async ({ text, signal }) => {
+    this.registerVoiceSpeakHandler?.(agentId, async ({ text, language, signal }) => {
       this.sessionLogger.info(
         {
           agentId,
+          language,
           textLength: text.length,
           preview: text.slice(0, 160),
         },
@@ -1068,6 +1069,7 @@ export class VoiceSession {
         (msg) => this.emit(msg),
         abortSignal,
         true,
+        { language },
       );
       this.sessionLogger.info(
         { agentId, textLength: text.length },

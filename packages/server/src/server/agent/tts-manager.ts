@@ -1,7 +1,7 @@
 import type pino from "pino";
 import type { Readable } from "node:stream";
 import { v4 as uuidv4 } from "uuid";
-import type { TextToSpeechProvider } from "../speech/speech-provider.js";
+import type { SpeechSynthesisOptions, TextToSpeechProvider } from "../speech/speech-provider.js";
 import { toResolver, type Resolvable } from "../speech/provider-resolver.js";
 import type { SessionOutboundMessage } from "../messages.js";
 
@@ -152,11 +152,13 @@ export class TTSManager {
     emitMessage: (msg: SessionOutboundMessage) => void,
     abortSignal: AbortSignal,
     isVoiceMode: boolean,
+    options: SpeechSynthesisOptions = {},
   ): Promise<void> {
     const ttsStartMs = Date.now();
     this.logger.info(
       {
         isVoiceMode,
+        language: options.language,
         textLength: text.length,
         text,
       },
@@ -182,7 +184,7 @@ export class TTSManager {
     const scheduleNextSegments = () => {
       while (nextSegmentToSchedule < segments.length && inflight.size < TTS_PREFETCH_SEGMENTS) {
         const segment = segments[nextSegmentToSchedule];
-        inflight.set(segment.index, this.scheduleSegmentSynthesis(segment, abortSignal));
+        inflight.set(segment.index, this.scheduleSegmentSynthesis(segment, options, abortSignal));
         nextSegmentToSchedule += 1;
       }
     };
@@ -249,6 +251,7 @@ export class TTSManager {
 
   private async synthesizeSegment(
     segment: TtsSegment,
+    options: SpeechSynthesisOptions,
     abortSignal: AbortSignal,
   ): Promise<PreparedTtsSegment> {
     const resolveStart = Date.now();
@@ -263,7 +266,7 @@ export class TTSManager {
     }
 
     const synthStart = Date.now();
-    const { stream, format } = await tts.synthesizeSpeech(segment.text);
+    const { stream, format } = await tts.synthesizeSpeech(segment.text, options);
     this.logger.info(
       {
         segmentIndex: segment.index,
@@ -288,9 +291,10 @@ export class TTSManager {
 
   private scheduleSegmentSynthesis(
     segment: TtsSegment,
+    options: SpeechSynthesisOptions,
     abortSignal: AbortSignal,
   ): Promise<PreparedSegmentResult> {
-    return this.synthesizeSegment(segment, abortSignal).then(
+    return this.synthesizeSegment(segment, options, abortSignal).then(
       (prepared) => {
         if (abortSignal.aborted) {
           this.destroySpeechStream(prepared.stream);

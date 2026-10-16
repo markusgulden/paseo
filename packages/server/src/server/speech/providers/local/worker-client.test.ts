@@ -147,6 +147,21 @@ describe("LocalSpeechWorkerClient", () => {
     expect(workers).toHaveLength(0);
   });
 
+  it("sends the declared language with TTS requests", async () => {
+    const { client, workers } = createClient();
+    const provider = new WorkerBackedTextToSpeechProvider(client);
+
+    const pending = provider.synthesizeSpeech("Bonjour.", { language: "fr" });
+    const request = workers[0].sent[0];
+    expect(request).toMatchObject({ type: "tts.synthesize", text: "Bonjour.", language: "fr" });
+
+    workers[0].respond(request, {
+      audio: bufferToWorkerBytes(Buffer.from([1, 2])),
+      format: "pcm;rate=22050",
+    });
+    (await pending).stream.destroy();
+  });
+
   it("sends TTS requests through the worker and returns the audio stream", async () => {
     const { client, workers } = createClient();
     const provider = new WorkerBackedTextToSpeechProvider(client);

@@ -1177,6 +1177,14 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
             .trim()
             .min(1, "text is required")
             .max(4000, "text must be 4000 characters or fewer"),
+          language: z
+            .string()
+            .trim()
+            .min(1)
+            .optional()
+            .describe(
+              "Language of the text as an ISO 639-1 code, for example en, de or fr. Local voice output uses the voice mapped to it.",
+            ),
         },
         outputSchema: {
           ok: z.boolean(),
@@ -1192,6 +1200,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         }
         await handler({
           text: args.text,
+          language: args.language,
           callerAgentId,
           signal: context?.signal,
         });

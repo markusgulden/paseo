@@ -2,7 +2,14 @@ import pino from "pino";
 
 import type { StreamingTranscriptionSession } from "../../speech-provider.js";
 import type { TurnDetectionSession } from "../../turn-detection-provider.js";
-import { getLocalSpeechModelDir, type LocalSttModelId, type LocalTtsModelId } from "./models.js";
+import {
+  getLocalSpeechModelDir,
+  LocalTtsModelIdSchema,
+  primaryLanguageSubtag,
+  resolveLocalTtsVoice,
+  type LocalSttModelId,
+  type LocalTtsVoiceSelection,
+} from "./models.js";
 import { SherpaOfflineRecognizerEngine } from "./sherpa/sherpa-offline-recognizer.js";
 import { SherpaOnnxParakeetSTT } from "./sherpa/sherpa-parakeet-stt.js";
 import { SherpaParakeetRealtimeTranscriptionSession } from "./sherpa/sherpa-parakeet-realtime-session.js";
@@ -55,21 +62,12 @@ function sttModelId(
   return (model === "voice" ? config.voiceSttModel : config.dictationSttModel) as LocalSttModelId;
 }
 
-function ttsModelId(config: LocalSpeechWorkerConfig): LocalTtsModelId {
-  return config.voiceTtsModel as LocalTtsModelId;
-}
-
 function sttEngineKey(config: LocalSpeechWorkerConfig, modelId: LocalSttModelId): string {
   return `${config.modelsDir}:${modelId}`;
 }
 
-function ttsKey(config: LocalSpeechWorkerConfig): string {
-  return [
-    config.modelsDir,
-    config.voiceTtsModel,
-    config.voiceTtsSpeakerId ?? 0,
-    config.voiceTtsSpeed ?? 1,
-  ].join(":");
+function ttsKey(config: LocalSpeechWorkerConfig, voice: LocalTtsVoiceSelection): string {
+  return [config.modelsDir, voice.model, voice.speakerId ?? 0, config.voiceTtsSpeed ?? 1].join(":");
 }
 
 function getSttEngine(
@@ -116,18 +114,33 @@ function getSttProvider(
   return created;
 }
 
-function getTtsProvider(config: LocalSpeechWorkerConfig): SherpaOnnxTTS {
-  const key = ttsKey(config);
+function getTtsProvider(
+  config: LocalSpeechWorkerConfig,
+  language: string | undefined,
+): SherpaOnnxTTS {
+  const voice = resolveLocalTtsVoice(config, language);
+  if (
+    language &&
+    config.voiceTtsVoices &&
+    !config.voiceTtsVoices[primaryLanguageSubtag(language)]
+  ) {
+    logger.info(
+      { language, voice: voice.model },
+      "No local voice mapped to the declared language; using the default voice",
+    );
+  }
+  const key = ttsKey(config, voice);
   const existing = ttsProviders.get(key);
   if (existing) {
     return existing;
   }
-  const modelDir = getLocalSpeechModelDir(config.modelsDir, ttsModelId(config));
+  const modelId = LocalTtsModelIdSchema.parse(voice.model);
+  const modelDir = getLocalSpeechModelDir(config.modelsDir, modelId);
   const created = new SherpaOnnxTTS(
     {
-      preset: ttsModelId(config),
+      preset: modelId,
       modelDir,
-      speakerId: config.voiceTtsSpeakerId,
+      speakerId: voice.speakerId,
       speed: config.voiceTtsSpeed,
     },
     logger,
@@ -280,7 +293,9 @@ function handleSessionRequest(message: LocalSpeechWorkerSessionRequest): void {
 
 async function handleRequest(message: LocalSpeechWorkerRequest): Promise<void> {
   if (message.type === "tts.synthesize") {
-    const result = await getTtsProvider(message.config).synthesizeSpeech(message.text);
+    const result = await getTtsProvider(message.config, message.language).synthesizeSpeech(
+      message.text,
+    );
     const chunks: Buffer[] = [];
     for await (const chunk of result.stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));

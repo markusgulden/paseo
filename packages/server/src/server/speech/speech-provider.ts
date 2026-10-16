@@ -63,6 +63,11 @@ export interface SpeechStreamResult {
   format: string;
 }
 
+export interface SpeechSynthesisOptions {
+  /** Language of the text, as declared by the agent (e.g. "fr"). */
+  language?: string;
+}
+
 export interface TextToSpeechProvider {
-  synthesizeSpeech(text: string): Promise<SpeechStreamResult>;
+  synthesizeSpeech(text: string, options?: SpeechSynthesisOptions): Promise<SpeechStreamResult>;
 }

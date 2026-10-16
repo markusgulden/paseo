@@ -28,6 +28,7 @@ const workerSpeechTest = hasParakeetModel(modelsDir) || shouldDownload ? test : 
 
 const piperSpeechTest =
   (hasModel(modelsDir, "piper-de_de-thorsten-medium") &&
+    hasModel(modelsDir, "piper-fr_fr-siwis-medium") &&
     hasModel(modelsDir, "parakeet-tdt-0.6b-v3-int8")) ||
   shouldDownload
     ? test
@@ -240,11 +241,15 @@ test("delivers audio and serves control requests while later TTS is synthesizing
 }, 120_000);
 
 piperSpeechTest(
-  "speaks German through a local Piper voice that Parakeet v3 transcribes back",
+  "speaks each declared language with its local Piper voice",
   async () => {
     await ensureSherpaOnnxModels({
       modelsDir,
-      modelIds: ["piper-de_de-thorsten-medium", "parakeet-tdt-0.6b-v3-int8"],
+      modelIds: [
+        "piper-de_de-thorsten-medium",
+        "piper-fr_fr-siwis-medium",
+        "parakeet-tdt-0.6b-v3-int8",
+      ],
       logger: pino({ level: "silent" }),
     });
     const worker = forkWorker();
@@ -259,13 +264,14 @@ piperSpeechTest(
       voiceSttModel: "parakeet-tdt-0.6b-v3-int8",
       dictationSttModel: "parakeet-tdt-0.6b-v3-int8",
       voiceTtsModel: "piper-de_de-thorsten-medium",
+      voiceTtsVoices: { fr: "piper-fr_fr-siwis-medium" },
     };
 
-    async function speakAndTranscribe(text: string): Promise<string> {
+    async function speakAndTranscribe(text: string, language?: string): Promise<string> {
       const speech = (await sendRequest(
         worker,
         messages,
-        { type: "tts.synthesize", config, text },
+        { type: "tts.synthesize", config, text, language },
         () => stderr,
       )) as LocalSpeechTtsResult;
       expect(speech.format).toBe("pcm;rate=22050");
@@ -285,7 +291,9 @@ piperSpeechTest(
     }
 
     const german = "Ich habe die Tests ausgeführt und alle sind grün.";
+    const french = "J'ai lancé les tests et ils sont tous verts.";
     expect(wordSimilarity(await speakAndTranscribe(german), german)).toBeGreaterThan(0.6);
+    expect(wordSimilarity(await speakAndTranscribe(french, "fr"), french)).toBeGreaterThan(0.6);
   },
   15 * 60_000,
 );

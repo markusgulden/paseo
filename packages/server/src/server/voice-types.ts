@@ -1,5 +1,6 @@
 export type VoiceSpeakHandler = (params: {
   text: string;
+  language?: string;
   callerAgentId: string;
   signal?: AbortSignal;
 }) => Promise<void>;

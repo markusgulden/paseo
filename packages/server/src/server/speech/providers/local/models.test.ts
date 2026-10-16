@@ -18,6 +18,7 @@ import {
   getLocalSpeechModelDir,
   listLocalSpeechModels,
   listMissingLocalSpeechModels,
+  resolveLocalTtsVoice,
 } from "./models.js";
 
 const logger = pino({ level: "silent" });
@@ -66,5 +67,36 @@ describe("local speech models", () => {
     );
     expect(existsSync(archive)).toBe(false);
     expect(await listMissingLocalSpeechModels({ modelsDir, modelIds: [modelId] })).toEqual([]);
+  });
+});
+
+describe("local voice selection", () => {
+  const config = {
+    voiceTtsModel: "kokoro-en-v0_19",
+    voiceTtsSpeakerId: 3,
+    voiceTtsVoices: {
+      de: "piper-de_de-thorsten-medium",
+      fr: "piper-fr_fr-siwis-medium",
+    },
+  };
+
+  test("speaks a declared language with the voice mapped to it", () => {
+    expect(resolveLocalTtsVoice(config, "fr")).toEqual({ model: "piper-fr_fr-siwis-medium" });
+  });
+
+  test("matches regional and differently cased language tags", () => {
+    expect(resolveLocalTtsVoice(config, "de-AT")).toEqual({
+      model: "piper-de_de-thorsten-medium",
+    });
+    expect(resolveLocalTtsVoice(config, "FR")).toEqual({ model: "piper-fr_fr-siwis-medium" });
+  });
+
+  test("falls back to the default voice and its speaker", () => {
+    const fallback = { model: "kokoro-en-v0_19", speakerId: 3 };
+    expect(resolveLocalTtsVoice(config, undefined)).toEqual(fallback);
+    expect(resolveLocalTtsVoice(config, "es")).toEqual(fallback);
+    expect(resolveLocalTtsVoice({ voiceTtsModel: "kokoro-en-v0_19" }, "fr")).toEqual({
+      model: "kokoro-en-v0_19",
+    });
   });
 });

@@ -166,6 +166,29 @@ describe("VoiceSession streaming transcription", () => {
     }
   });
 
+  test("synthesizes speech in the language the speak tool declares", async () => {
+    const requests: Array<{ text: string; language?: string }> = [];
+    const tts: TextToSpeechProvider = {
+      async synthesizeSpeech(text, options) {
+        requests.push({ text, language: options?.language });
+        return { stream: Readable.from([Buffer.from("audio")]), format: "pcm;rate=24000" };
+      },
+    };
+    const { voiceSession, host, speak } = createVoiceSession(tts);
+    const emit = host.emit;
+    host.emit = (message) => {
+      emit(message);
+      if (message.type === "audio_output") voiceSession.handleAudioPlayed(message.payload.id);
+    };
+    await voiceSession.handleSetVoiceMode(true, VOICE_AGENT_ID);
+    try {
+      await speak({ text: "Bonjour.", language: "fr", callerAgentId: VOICE_AGENT_ID });
+      expect(requests).toEqual([{ text: "Bonjour.", language: "fr" }]);
+    } finally {
+      await voiceSession.cleanup();
+    }
+  });
+
   test("session abort stops later audio even when the speak tool supplies its own signal", async () => {
     const tts: TextToSpeechProvider = {
       async synthesizeSpeech() {

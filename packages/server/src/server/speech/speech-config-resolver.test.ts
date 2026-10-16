@@ -80,6 +80,49 @@ describe("resolveSpeechConfig", () => {
     });
   });
 
+  test("resolves a voice per language for local voice mode", () => {
+    const persisted = PersistedConfigSchema.parse({
+      features: {
+        voiceMode: {
+          tts: {
+            provider: "local",
+            model: "kokoro-en-v0_19",
+            voices: { DE: "piper-de_de-thorsten-medium", "fr-FR": "piper-fr_FR-siwis-medium" },
+          },
+        },
+      },
+    });
+
+    const result = resolveSpeechConfig({
+      paseoHome: "/tmp/paseo-home",
+      env: {} as NodeJS.ProcessEnv,
+      persisted,
+    });
+
+    expect(result.speech.local?.models.voiceTtsVoices).toEqual({
+      de: "piper-de_de-thorsten-medium",
+      fr: "piper-fr_fr-siwis-medium",
+    });
+  });
+
+  test("rejects a language mapped to a model that is not a local voice", () => {
+    const persisted = PersistedConfigSchema.parse({
+      features: {
+        voiceMode: {
+          tts: { provider: "local", voices: { fr: "parakeet-tdt-0.6b-v3-int8" } },
+        },
+      },
+    });
+
+    expect(() =>
+      resolveSpeechConfig({
+        paseoHome: "/tmp/paseo-home",
+        env: {} as NodeJS.ProcessEnv,
+        persisted,
+      }),
+    ).toThrow("Invalid model id");
+  });
+
   test("resolves feature-scoped local speech settings", () => {
     const persisted = PersistedConfigSchema.parse({
       features: {

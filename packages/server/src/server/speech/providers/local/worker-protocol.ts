@@ -12,6 +12,8 @@ export interface LocalSpeechWorkerConfig {
   voiceTtsModel: string;
   voiceTtsSpeakerId?: number;
   voiceTtsSpeed?: number;
+  /** Voice per primary language subtag, used when a request declares a language. */
+  voiceTtsVoices?: Record<string, string>;
 }
 
 export type LocalSpeechSessionKind = "voiceStt" | "dictationStt" | "vad";
@@ -22,6 +24,7 @@ export type LocalSpeechWorkerRequest =
       requestId: string;
       config: LocalSpeechWorkerConfig;
       text: string;
+      language?: string;
     }
   | {
       type: "stt.transcribe";

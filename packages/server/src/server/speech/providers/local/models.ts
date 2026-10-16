@@ -57,3 +57,34 @@ export async function ensureLocalSpeechModels(options: {
     signal: options.signal,
   });
 }
+
+/** Reduces a language tag such as "de-AT" or "FR" to its primary subtag ("de", "fr"). */
+export function primaryLanguageSubtag(language: string): string {
+  return language.trim().toLowerCase().split(/[-_]/)[0];
+}
+
+export interface LocalTtsVoiceSelection {
+  model: string;
+  speakerId?: number;
+}
+
+/**
+ * Picks the voice for a declared language. Mapped voices speak as their first speaker;
+ * the configured speaker id belongs to the default voice.
+ */
+export function resolveLocalTtsVoice(
+  config: {
+    voiceTtsModel: string;
+    voiceTtsSpeakerId?: number;
+    voiceTtsVoices?: Record<string, string>;
+  },
+  language: string | undefined,
+): LocalTtsVoiceSelection {
+  const mapped = language ? config.voiceTtsVoices?.[primaryLanguageSubtag(language)] : undefined;
+  if (mapped && mapped !== config.voiceTtsModel) {
+    return { model: mapped };
+  }
+  return config.voiceTtsSpeakerId === undefined
+    ? { model: config.voiceTtsModel }
+    : { model: config.voiceTtsModel, speakerId: config.voiceTtsSpeakerId };
+}

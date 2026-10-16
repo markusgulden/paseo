@@ -148,6 +148,8 @@ const FeatureVoiceModeSchema = z
         voice: z.string().trim().min(1).optional(),
         speakerId: z.number().int().optional(),
         speed: z.number().optional(),
+        // Local voice per language, e.g. { "fr": "piper-fr_fr-siwis-medium" }.
+        voices: z.record(z.string().trim().min(1), z.string().min(1)).optional(),
       })
       .strict()
       .optional(),

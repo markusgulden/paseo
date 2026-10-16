@@ -52,6 +52,30 @@ describe("TTSManager", () => {
     expect(audioMessage?.payload.isLastChunk).toBe(true);
   });
 
+  it("synthesizes every segment in the declared language", async () => {
+    const calls: Array<{ text: string; language?: string }> = [];
+    const tts: TextToSpeechProvider = {
+      async synthesizeSpeech(text, options) {
+        calls.push({ text, language: options?.language });
+        return { stream: Readable.from([Buffer.from("x")]), format: "pcm;rate=22050" };
+      },
+    };
+    const manager = new TTSManager("s1", pino({ level: "silent" }), tts);
+
+    await manager.generateAndWaitForPlayback(
+      `${"Bonjour. ".repeat(40)}Merci.`,
+      (msg) => {
+        if (msg.type === "audio_output") manager.confirmAudioPlayed(msg.payload.id);
+      },
+      new AbortController().signal,
+      true,
+      { language: "fr" },
+    );
+
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls.map((call) => call.language)).toEqual(calls.map(() => "fr"));
+  });
+
   it("splits long text into safe synthesis segments", async () => {
     const calls: string[] = [];
     const tts: TextToSpeechProvider = {

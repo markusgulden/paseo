@@ -5951,6 +5951,26 @@ describe("speak MCP tool", () => {
     );
   });
 
+  it("forwards the language the agent declares for the spoken text", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const speak = vi.fn().mockResolvedValue(undefined);
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "voice-agent-1",
+      enableVoiceTools: true,
+      resolveSpeakHandler: () => speak,
+      logger,
+    });
+    const tool = registeredTool(server, "speak");
+
+    await tool.handler({ text: "Bonjour.", language: "fr" });
+    expect(speak).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Bonjour.", language: "fr" }),
+    );
+  });
+
   it("fails when no speak handler exists", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const server = await createAgentMcpServer({
