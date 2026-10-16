@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
+import type { LocalTtsModelId } from "./model-catalog.js";
 import { SherpaOnnxTTS } from "./sherpa-tts.js";
 
 const directories: string[] = [];
@@ -11,17 +12,25 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
-function createTts(numThreads?: number, beforeGenerate?: () => Promise<void>) {
+function createModelDir(files: string[]): string {
   const modelDir = mkdtempSync(join(tmpdir(), "paseo-tts-"));
   directories.push(modelDir);
-  for (const name of ["model.onnx", "voices.bin", "tokens.txt"])
-    writeFileSync(join(modelDir, name), "");
+  for (const name of files) writeFileSync(join(modelDir, name), "");
   mkdirSync(join(modelDir, "espeak-ng-data"));
+  return modelDir;
+}
+
+function createTts(
+  numThreads?: number,
+  beforeGenerate?: () => Promise<void>,
+  preset: LocalTtsModelId = "kokoro-en-v0_19",
+  modelDir = createModelDir(["model.onnx", "voices.bin", "tokens.txt"]),
+) {
   let nativeConfig: unknown;
   const requests: unknown[] = [];
   const released: boolean[] = [];
   const tts = new SherpaOnnxTTS(
-    { preset: "kokoro-en-v0_19", modelDir, numThreads },
+    { preset, modelDir, numThreads },
     pino({ level: "silent" }),
     () => ({
       OfflineTts: class {
@@ -138,4 +147,47 @@ describe("SherpaOnnxTTS", () => {
       expect(nativeConfig).not.toHaveProperty("provider");
     },
   );
+
+  it("drives a Piper voice through the native VITS model", () => {
+    const modelDir = createModelDir(["de_DE-thorsten-medium.onnx", "tokens.txt"]);
+    const { nativeConfig } = createTts(
+      undefined,
+      undefined,
+      "piper-de_de-thorsten-medium",
+      modelDir,
+    );
+    expect(nativeConfig).toEqual({
+      model: {
+        numThreads: 2,
+        provider: "cpu",
+        vits: {
+          model: join(modelDir, "de_DE-thorsten-medium.onnx"),
+          tokens: join(modelDir, "tokens.txt"),
+          dataDir: join(modelDir, "espeak-ng-data"),
+          lengthScale: 1,
+        },
+      },
+      maxNumSentences: 1,
+    });
+  });
+
+  it("speaks a single-speaker Piper voice as speaker 0", async () => {
+    const modelDir = createModelDir(["de_DE-thorsten-medium.onnx", "tokens.txt"]);
+    const { tts, requests } = createTts(
+      undefined,
+      undefined,
+      "piper-de_de-thorsten-medium",
+      modelDir,
+    );
+    const result = await tts.synthesizeSpeech("Hallo");
+    result.stream.destroy();
+    expect(requests).toEqual([{ text: "Hallo", sid: 0, speed: 1, enableExternalBuffer: false }]);
+  });
+
+  it("names the missing file when a Piper voice is incomplete", () => {
+    const modelDir = createModelDir(["tokens.txt"]);
+    expect(() => createTts(undefined, undefined, "piper-de_de-thorsten-medium", modelDir)).toThrow(
+      `Missing TTS model: ${join(modelDir, "de_DE-thorsten-medium.onnx")}`,
+    );
+  });
 });

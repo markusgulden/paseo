@@ -5,12 +5,16 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import pino from "pino";
 import { expect, onTestFinished, test } from "vitest";
 
 import { parsePcm16MonoWav, wordSimilarity } from "../../../test-utils/dictation-e2e.js";
+import { getSherpaOnnxModelSpec, type SherpaOnnxModelId } from "./sherpa/model-catalog.js";
 import { ensureSherpaOnnxModels } from "./sherpa/model-downloader.js";
 import { applySherpaLoaderEnv } from "./sherpa/sherpa-runtime-env.js";
 import type {
+  LocalSpeechTranscriptionResult,
+  LocalSpeechTtsResult,
   LocalSpeechWorkerConfig,
   LocalSpeechWorkerRequest,
   LocalSpeechWorkerToParentMessage,
@@ -21,6 +25,18 @@ const modelsDir =
   process.env.PASEO_LOCAL_MODELS_DIR ?? path.join(homedir(), ".paseo", "models", "local-speech");
 const shouldDownload = process.env.PASEO_SPEECH_E2E_DOWNLOAD === "1";
 const workerSpeechTest = hasParakeetModel(modelsDir) || shouldDownload ? test : test.skip;
+
+const piperSpeechTest =
+  (hasModel(modelsDir, "piper-de_de-thorsten-medium") &&
+    hasModel(modelsDir, "parakeet-tdt-0.6b-v3-int8")) ||
+  shouldDownload
+    ? test
+    : test.skip;
+
+function hasModel(dir: string, modelId: SherpaOnnxModelId): boolean {
+  const spec = getSherpaOnnxModelSpec(modelId);
+  return spec.requiredFiles.every((file) => existsSync(path.join(dir, spec.extractedDir, file)));
+}
 
 function hasParakeetModel(dir: string): boolean {
   return (
@@ -222,6 +238,57 @@ test("delivers audio and serves control requests while later TTS is synthesizing
   await second;
   expect(completed).toEqual(["first", "second"]);
 }, 120_000);
+
+piperSpeechTest(
+  "speaks German through a local Piper voice that Parakeet v3 transcribes back",
+  async () => {
+    await ensureSherpaOnnxModels({
+      modelsDir,
+      modelIds: ["piper-de_de-thorsten-medium", "parakeet-tdt-0.6b-v3-int8"],
+      logger: pino({ level: "silent" }),
+    });
+    const worker = forkWorker();
+    const messages: LocalSpeechWorkerToParentMessage[] = [];
+    let stderr = "";
+    worker.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    worker.on("message", (message: LocalSpeechWorkerToParentMessage) => messages.push(message));
+    const config: LocalSpeechWorkerConfig = {
+      modelsDir,
+      voiceSttModel: "parakeet-tdt-0.6b-v3-int8",
+      dictationSttModel: "parakeet-tdt-0.6b-v3-int8",
+      voiceTtsModel: "piper-de_de-thorsten-medium",
+    };
+
+    async function speakAndTranscribe(text: string): Promise<string> {
+      const speech = (await sendRequest(
+        worker,
+        messages,
+        { type: "tts.synthesize", config, text },
+        () => stderr,
+      )) as LocalSpeechTtsResult;
+      expect(speech.format).toBe("pcm;rate=22050");
+      const transcript = (await sendRequest(
+        worker,
+        messages,
+        {
+          type: "stt.transcribe",
+          config,
+          model: "voice",
+          audio: speech.audio,
+          format: "audio/pcm;rate=22050",
+        },
+        () => stderr,
+      )) as LocalSpeechTranscriptionResult;
+      return transcript.text;
+    }
+
+    const german = "Ich habe die Tests ausgeführt und alle sind grün.";
+    expect(wordSimilarity(await speakAndTranscribe(german), german)).toBeGreaterThan(0.6);
+  },
+  15 * 60_000,
+);
 
 type RequestInput = LocalSpeechWorkerRequest extends infer Request
   ? Request extends LocalSpeechWorkerRequest

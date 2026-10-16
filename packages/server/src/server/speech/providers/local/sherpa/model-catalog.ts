@@ -4,6 +4,9 @@ export type SherpaOnnxModelKind = "stt-offline" | "tts";
 
 type DefaultModelRole = "stt" | "tts";
 
+/** How sherpa-onnx loads a TTS model: Kokoro bundles, or VITS models such as Piper voices. */
+export type SherpaTtsEngine = { type: "kokoro" } | { type: "vits"; model: string };
+
 interface SherpaOnnxCatalogEntry {
   kind: SherpaOnnxModelKind;
   archiveUrl: string;
@@ -11,6 +14,7 @@ interface SherpaOnnxCatalogEntry {
   requiredFiles: string[];
   description: string;
   defaultFor?: DefaultModelRole;
+  ttsEngine?: SherpaTtsEngine;
 }
 
 export const SHERPA_ONNX_MODEL_CATALOG = {
@@ -40,6 +44,27 @@ export const SHERPA_ONNX_MODEL_CATALOG = {
     requiredFiles: ["model.onnx", "voices.bin", "tokens.txt", "espeak-ng-data"],
     description: "Kokoro TTS (higher quality; larger).",
     defaultFor: "tts",
+    ttsEngine: { type: "kokoro" },
+  },
+  // Piper voices: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models (vits-piper-*).
+  // Ids are lowercase because model ids are matched case-insensitively.
+  "piper-de_de-thorsten-medium": {
+    kind: "tts",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium.tar.bz2",
+    extractedDir: "vits-piper-de_DE-thorsten-medium",
+    requiredFiles: ["de_DE-thorsten-medium.onnx", "tokens.txt", "espeak-ng-data"],
+    description: "Piper Thorsten (German, single speaker, 22.05 kHz).",
+    ttsEngine: { type: "vits", model: "de_DE-thorsten-medium.onnx" },
+  },
+  "piper-fr_fr-siwis-medium": {
+    kind: "tts",
+    archiveUrl:
+      "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-siwis-medium.tar.bz2",
+    extractedDir: "vits-piper-fr_FR-siwis-medium",
+    requiredFiles: ["fr_FR-siwis-medium.onnx", "tokens.txt", "espeak-ng-data"],
+    description: "Piper Siwis (French, single speaker, 22.05 kHz).",
+    ttsEngine: { type: "vits", model: "fr_FR-siwis-medium.onnx" },
   },
 } as const satisfies Record<string, SherpaOnnxCatalogEntry>;
 

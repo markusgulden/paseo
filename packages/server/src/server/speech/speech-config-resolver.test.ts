@@ -57,6 +57,29 @@ describe("resolveSpeechConfig", () => {
     });
   });
 
+  test("resolves a local Piper voice from the voice mode config", () => {
+    const persisted = PersistedConfigSchema.parse({
+      features: {
+        voiceMode: {
+          stt: { provider: "local", model: "parakeet-tdt-0.6b-v3-int8" },
+          tts: { provider: "local", model: "piper-de_DE-thorsten-medium" },
+        },
+      },
+    });
+
+    const result = resolveSpeechConfig({
+      paseoHome: "/tmp/paseo-home",
+      env: {} as NodeJS.ProcessEnv,
+      persisted,
+    });
+
+    expect(result.speech.local?.models).toEqual({
+      dictationStt: "parakeet-tdt-0.6b-v2-int8",
+      voiceStt: "parakeet-tdt-0.6b-v3-int8",
+      voiceTts: "piper-de_de-thorsten-medium",
+    });
+  });
+
   test("resolves feature-scoped local speech settings", () => {
     const persisted = PersistedConfigSchema.parse({
       features: {
